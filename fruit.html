@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gemstone Glitz Ultra</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --grid-size: 8; --tile-size: min(11vw, 55px); --gap: 4px; }
+        body { font-family: 'Poppins', sans-serif; touch-action: none; overflow: hidden; background-color: #0f172a; color: #e2e8f0; }
+        #main-menu-container {
+            width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: linear-gradient(45deg, #1e293b, #0f172a, #1e293b); background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite; position: relative; overflow: hidden;
+        }
+        .floating-gem { position: absolute; font-size: 40px; opacity: 0.1; animation: float 20s infinite ease-in-out; }
+        @keyframes float { 0% { transform: translateY(100vh) rotate(0deg); } 100% { transform: translateY(-100px) rotate(360deg); } }
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        @keyframes shimmer { 0%, 100% { text-shadow: 0 0 8px #fff, 0 0 12px #facc15, 0 0 20px #f97316; } 50% { text-shadow: 0 0 12px #fff, 0 0 20px #facc15, 0 0 30px #f97316; } }
+        .game-board-frame { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 20px; box-shadow: inset 0 0 15px rgba(0,0,0,0.5); }
+        .game-container { width: calc(var(--grid-size) * (var(--tile-size) + var(--gap))); height: calc(var(--grid-size) * (var(--tile-size) + var(--gap))); position: relative; }
+        .grid { display: grid; grid-template-columns: repeat(var(--grid-size), 1fr); gap: var(--gap); position: relative; }
+        .tile {
+            width: var(--tile-size); height: var(--tile-size); display: flex; justify-content: center; align-items: center;
+            font-size: calc(var(--tile-size) * 0.6); border-radius: 12px; cursor: pointer; position: relative;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5); background: rgba(255,255,255,0.1);
+            box-shadow: inset 0 0 8px rgba(255,255,255,0.3), 0 4px 6px rgba(0,0,0,0.4);
+        }
+        .tile-selected { transform: scale(1.15); box-shadow: 0 0 20px 5px #facc15, inset 0 0 10px rgba(255,255,255,0.5); z-index: 10; }
+        .hint-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+        .match-animation { animation: pop 0.4s ease-out forwards; }
+        @keyframes pop { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.5; } 100% { transform: scale(0); opacity: 0; } }
+        .new-tile-animation { animation: drop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        @keyframes drop-in { 0% { transform: translateY(-300px) scale(0.5); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+        .modal { transition: opacity 0.3s ease, transform 0.3s ease; }
+        .modal.hidden { opacity: 0; transform: scale(0.95); pointer-events: none; }
+        #combo-text, #reshuffle-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; font-weight: 800; color: white; text-shadow: 0 0 15px #f97316, 0 0 25px #f97316; opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.3s ease; z-index: 100; }
+        #combo-text.show, #reshuffle-text.show { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+        .menu-button { display: inline-flex; align-items: center; justify-content: center; gap: 0.75rem; border: none; border-radius: 9999px; font-weight: 600; color: white; transition: all 0.2s ease-in-out; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08); }
+        .menu-button:not(.disabled):hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 0 20px var(--glow-color); }
+        .menu-button:active { transform: translateY(0); }
+        .menu-button.disabled { opacity: 0.5; cursor: not-allowed; }
+        .line-h, .line-v, .super-bomb { overflow: hidden; }
+        .line-h::after, .line-v::after, .super-bomb::after, .super-bomb::before { content: ''; position: absolute; background: white; opacity: 0.7; border-radius: 2px; animation: pulse-glow 1s infinite; }
+        .line-h::after { width: 120%; height: 8px; left: -10%; top: calc(50% - 4px); }
+        .line-v::after { width: 8px; height: 120%; top: -10%; left: calc(50% - 4px); }
+        .super-bomb::before { width: 120%; height: 8px; left: -10%; top: calc(50% - 4px); }
+        .super-bomb::after { width: 8px; height: 120%; top: -10%; left: calc(50% - 4px); }
+        .color-bomb { animation: rainbow-bg 2s linear infinite; background-size: 200% 200%; }
+        @keyframes rainbow-bg { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 4px 2px white; } 50% { box-shadow: 0 0 10px 4px white; } }
+        @keyframes screen-shake { 0%, 100% { transform: translateX(0); } 10% { transform: translateX(-5px); } 20% { transform: translateX(5px); } 30% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 50% { transform: translateX(0); } }
+        .screen-shake { animation: screen-shake 0.3s ease-in-out; }
+        .score-popup { position: absolute; font-weight: 800; color: #facc15; text-shadow: 0 0 5px black; z-index: 100; pointer-events: none; transition: transform 1s ease-out, opacity 1s ease-out; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 flex items-center justify-center h-screen overflow-hidden">
+
+    <div id="game-wrapper" class="w-full h-full">
+        <div id="main-menu-container">
+            <div id="main-menu" class="text-center p-8 z-10">
+                <h1 class="text-7xl font-extrabold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400" style="animation: shimmer 2s ease-in-out infinite;">Gemstone Glitz</h1>
+                <p class="text-slate-400 mb-12 text-lg">The ultimate tile-matching adventure!</p>
+                <div class="flex flex-col items-center gap-5">
+                    <button id="play-button" class="menu-button w-64 py-4 px-10 text-2xl bg-gradient-to-br from-emerald-500 to-green-600" style="--glow-color: #10b981;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                        <span id="play-button-text">Play</span>
+                    </button>
+                    <button id="how-to-play-button" class="menu-button w-64 py-3 px-8 text-xl bg-gradient-to-br from-violet-500 to-purple-600" style="--glow-color: #8b5cf6;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>
+                        <span>How to Play</span>
+                    </button>
+                    <button id="high-scores-button" class="menu-button w-64 py-3 px-8 text-xl bg-gradient-to-br from-sky-500 to-blue-600" style="--glow-color: #3b82f6;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M11.983 1.904a1.5 1.5 0 00-1.966 0L7.5 5.119 4.017 8.602a1.5 1.5 0 000 2.121l3.483 3.483 2.5 2.5a1.5 1.5 0 002.121 0l3.483-3.483 3.483-3.483a1.5 1.5 0 000-2.121L12.5 1.904zM10 14.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" /></svg>
+                        <span>High Scores</span>
+                    </button>
+                </div>
+                <div class="flex justify-center items-center gap-4 mt-8">
+                    <button id="sound-toggle-button" class="bg-slate-700 p-3 rounded-full transition-colors hover:bg-slate-600"></button>
+                    <div class="text-xs text-slate-500">User ID: <span id="user-id-display-menu"></span></div>
+                </div>
+            </div>
+        </div>
+        <div id="game-screen" class="hidden w-full h-full flex-col items-center justify-center bg-slate-900 p-4">
+            <div class="w-full max-w-lg">
+                <div class="w-full mb-4 p-2 bg-slate-800/50 rounded-lg shadow-md">
+                    <div class="flex justify-between items-center text-lg">
+                        <div><span class="text-yellow-300">Lvl:</span> <span id="level" class="font-bold">1</span></div>
+                        <div><span class="text-red-400">Moves:</span> <span id="moves" class="font-bold">30</span></div>
+                        <div><span class="text-green-400">Score:</span> <span id="score" class="font-bold">0</span></div>
+                        <button id="pause-button" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold p-2 rounded-full shadow-lg w-10 h-10 flex items-center justify-center transition-transform transform hover:scale-110"></button>
+                    </div>
+                    <div class="mt-2"><div class="progress-bar-container"><div id="level-progress" class="progress-bar"></div></div></div>
+                </div>
+                <div class="game-board-frame">
+                    <div id="game-container" class="game-container mx-auto">
+                        <div id="grid" class="grid"></div>
+                        <div id="combo-text"></div>
+                        <div id="reshuffle-text">Reshuffling...</div>
+                    </div>
+                </div>
+                <div class="mt-4 text-xs text-slate-500 text-center">User ID: <span id="user-id-display-game"></span></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="how-to-play-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 p-6 rounded-2xl shadow-2xl border-2 border-violet-500 w-full max-w-md">
+            <h2 class="text-3xl font-bold mb-4 text-center">How to Play</h2>
+            <div class="space-y-4 text-slate-300">
+                <p><strong class="text-white">Match 3:</strong> Swipe to swap gems. Match 3 to score points!</p>
+                <p><strong class="text-white">Match 4:</strong> Creates a <strong class="text-cyan-300">Line Clearer</strong>. Match it to clear a row or column.</p>
+                <p><strong class="text-white">Match L/T:</strong> Creates a <strong class="text-orange-400">Super Bomb</strong>. Match it to clear a row AND column.</p>
+                <p><strong class="text-white">Match 5:</strong> Creates a <strong class="text-fuchsia-400">Color Bomb</strong>. Swap it to clear all gems of one color.</p>
+            </div>
+            <button id="close-how-to-play-button" class="mt-6 menu-button w-full py-2 px-6 text-lg bg-slate-600 hover:bg-slate-700" style="--glow-color: #475569;">Got it!</button>
+        </div>
+    </div>
+    
+    <div id="pause-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+        <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl text-center border-2 border-yellow-400">
+            <h2 class="text-4xl font-bold mb-6">Paused</h2>
+            <div class="flex flex-col gap-4 items-center">
+                 <button id="resume-button" class="menu-button w-60 py-3 px-8 text-xl bg-gradient-to-br from-emerald-500 to-green-600" style="--glow-color: #10b981;">Resume</button>
+                 <button id="main-menu-button" class="menu-button w-60 py-3 px-8 text-xl bg-gradient-to-br from-rose-500 to-red-600" style="--glow-color: #f43f5e;">Main Menu</button>
+                 <button id="sound-toggle-button-pause" class="bg-slate-700 p-3 rounded-full transition-colors hover:bg-slate-600 mt-2"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="end-level-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl text-center border-2 w-full max-w-sm" id="end-level-border">
+            <h2 id="end-level-title" class="text-4xl font-bold mb-2"></h2>
+            <p class="text-xl mb-6">Your Score: <span id="final-score" class="font-bold text-yellow-300"></span></p>
+            <div id="end-level-buttons" class="flex flex-col gap-4 items-center"></div>
+        </div>
+    </div>
+    
+    <div id="high-scores-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 p-6 rounded-2xl shadow-2xl text-center border-2 border-sky-400 w-full max-w-md">
+            <h2 class="text-3xl font-bold mb-4">High Scores</h2>
+            <div id="high-scores-list" class="text-left max-h-64 overflow-y-auto pr-2"></div>
+            <button id="close-high-scores-button" class="mt-6 menu-button py-2 px-6 text-lg bg-slate-600 hover:bg-slate-700" style="--glow-color: #475569;">Close</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Constants & State ---
+        const GRID_SIZE = 8;
+        const TILE_TYPES = ['🍓', '🍇', '🍊', '🍋', '🍒', '💎'];
+        const TILE_SPECIALS = { BOMB: '💣', LINE_H: '↔️', LINE_V: '↕️', SUPER_BOMB: '✨', COLOR_BOMB: '💥' };
+        let grid = [], score = 0, level = 1, movesRemaining = 0, levelTargetScore = 1000;
+        let isProcessing = false, isPaused = false, isMuted = false, hintTimer = null;
+        let db, auth, userId, isAuthReady = false;
+        
+        // --- Audio ---
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type, options = {}) {
+            if (isMuted || !audioContext) return;
+            if (audioContext.state === 'suspended') audioContext.resume();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            switch(type) {
+                case 'swap': gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(300, audioContext.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.2); break;
+                case 'match': gainNode.gain.setValueAtTime(0.2, audioContext.currentTime); oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(440 + (options.combo || 1) * 50, audioContext.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.3); break;
+                case 'bomb': gainNode.gain.setValueAtTime(0.4, audioContext.currentTime); oscillator.type = 'sawtooth'; oscillator.frequency.setValueAtTime(120, audioContext.currentTime); oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.5); gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5); break;
+                case 'powerup': gainNode.gain.setValueAtTime(0.3, audioContext.currentTime); oscillator.type = 'triangle'; oscillator.frequency.setValueAtTime(600, audioContext.currentTime); oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.2); gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.2); break;
+                case 'shuffle': gainNode.gain.setValueAtTime(0.3, audioContext.currentTime); oscillator.type = 'noise'; gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.5); break;
+            }
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+        
+        // --- DOM Elements ---
+        const gameWrapper = document.getElementById('game-wrapper');
+        const mainMenuContainer = document.getElementById('main-menu-container');
+        const gameScreen = document.getElementById('game-screen');
+        const gridElement = document.getElementById('grid');
+        const gameContainer = document.getElementById('game-container');
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const movesElement = document.getElementById('moves');
+        const levelProgress = document.getElementById('level-progress');
+        const comboText = document.getElementById('combo-text');
+        const reshuffleText = document.getElementById('reshuffle-text');
+        const userIdDisplayMenu = document.getElementById('user-id-display-menu');
+        const userIdDisplayGame = document.getElementById('user-id-display-game');
+        const howToPlayModal = document.getElementById('how-to-play-modal');
+        const pauseModal = document.getElementById('pause-modal');
+        const endLevelModal = document.getElementById('end-level-modal');
+        const finalScoreElement = document.getElementById('final-score');
+        const endLevelTitle = document.getElementById('end-level-title');
+        const endLevelBorder = document.getElementById('end-level-border');
+        const endLevelButtons = document.getElementById('end-level-buttons');
+        const highScoresModal = document.getElementById('high-scores-modal');
+        const highScoresList = document.getElementById('high-scores-list');
+        const playButton = document.getElementById('play-button');
+        const playButtonText = document.getElementById('play-button-text');
+        const howToPlayButton = document.getElementById('how-to-play-button');
+        const closeHowToPlayButton = document.getElementById('close-how-to-play-button');
+        const highScoresButton = document.getElementById('high-scores-button');
+        const closeHighScoresButton = document.getElementById('close-high-scores-button');
+        const pauseButton = document.getElementById('pause-button');
+        const resumeButton = document.getElementById('resume-button');
+        const mainMenuButton = document.getElementById('main-menu-button');
+        const soundToggleButton = document.getElementById('sound-toggle-button');
+        const soundToggleButtonPause = document.getElementById('sound-toggle-button-pause');
+
+        // --- Initialization ---
+        function init() {
+            mainMenuContainer.style.display = 'flex';
+            gameScreen.classList.add('hidden');
+            [endLevelModal, pauseModal, highScoresModal, howToPlayModal].forEach(hideModal);
+            if (mainMenuContainer.childElementCount < 20) {
+                for (let i = 0; i < 15; i++) {
+                    const gem = document.createElement('div');
+                    gem.classList.add('floating-gem');
+                    gem.textContent = TILE_TYPES[i % TILE_TYPES.length];
+                    gem.style.left = `${Math.random() * 100}vw`;
+                    gem.style.animationDuration = `${10 + Math.random() * 15}s`;
+                    gem.style.animationDelay = `${Math.random() * 10}s`;
+                    mainMenuContainer.prepend(gem);
+                }
+            }
+            playButton.classList.add('disabled');
+            playButtonText.textContent = 'Loading...';
+            if (!isAuthReady) initializeFirebase();
+            else {
+                playButton.classList.remove('disabled');
+                playButtonText.textContent = 'Play';
+            }
+            updateSoundButtons();
+        }
+
+        function startGame(startLevel = 1) {
+            level = startLevel;
+            score = 0;
+            levelTargetScore = Math.floor(1000 * Math.pow(1.5, level - 1));
+            movesRemaining = 30 - (level > 5 ? 10 : level * 2);
+            isProcessing = false; isPaused = false;
+            updateAllDisplays();
+            mainMenuContainer.style.display = 'none';
+            gameScreen.classList.remove('hidden');
+            gameScreen.classList.add('flex');
+            createAndRenderGrid();
+        }
+        
+        async function createAndRenderGrid() {
+            grid = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                grid.push(Array(GRID_SIZE).fill(null).map((_, c) => createTile(r, c)));
+            }
+            while (findMatches().length > 0 || !isMovePossible()) {
+                grid.flat().forEach(tile => {
+                    if (tile) grid[tile.row][tile.col] = createTile(tile.row, tile.col);
+                });
+            }
+            renderGrid();
+            startHintTimer();
+        }
+
+        function createTile(row, col, options = {}) {
+            return {
+                row, col,
+                type: options.type || TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)],
+                special: options.special || null,
+                isBomb: !options.type && !options.special && Math.random() < 0.03,
+                id: `tile-${row}-${col}-${Math.random()}`
+            };
+        }
+
+        function renderGrid() {
+            gridElement.innerHTML = '';
+            grid.forEach(row => row.forEach(tile => {
+                if (!tile) return;
+                const tileDiv = document.createElement('div');
+                tileDiv.className = 'tile';
+                tileDiv.dataset.id = tile.id;
+                tileDiv.dataset.row = tile.row;
+                tileDiv.dataset.col = tile.col;
+                if (tile.isBomb) tileDiv.textContent = TILE_SPECIALS.BOMB;
+                else if (tile.special) {
+                    tileDiv.textContent = tile.type;
+                    if (tile.special === 'line-h') tileDiv.classList.add('line-h');
+                    if (tile.special === 'line-v') tileDiv.classList.add('line-v');
+                    if (tile.special === 'super-bomb') { tileDiv.textContent = TILE_SPECIALS.SUPER_BOMB; tileDiv.classList.add('super-bomb'); }
+                    if (tile.special === 'color-bomb') {
+                        tileDiv.textContent = TILE_SPECIALS.COLOR_BOMB;
+                        tileDiv.classList.add('color-bomb');
+                        tileDiv.style.background = `linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet)`;
+                    }
+                } else tileDiv.textContent = tile.type;
+                gridElement.appendChild(tileDiv);
+            }));
+        }
+
+        // --- Game Logic ---
+        async function trySwap(r1, c1, r2, c2) {
+            if (isProcessing) return;
+            isProcessing = true;
+            stopHintTimer();
+            movesRemaining--;
+            updateAllDisplays();
+            await swapAndCheck(r1, c1, r2, c2);
+            if (!isPaused) await checkEndCondition();
+            isProcessing = false;
+        }
+
+        async function swapAndCheck(r1, c1, r2, c2) {
+            const tile1 = grid[r1][c1];
+            const tile2 = grid[r2][c2];
+            if (tile1.special === 'color-bomb') { await processColorBomb(tile1, tile2); return; }
+            if (tile2.special === 'color-bomb') { await processColorBomb(tile2, tile1); return; }
+            playSound('swap');
+            await animateSwap(r1, c1, r2, c2);
+            const allMatches = findMatches();
+            if (allMatches.length > 0) {
+                const intersection = findIntersection(allMatches);
+                await processMatches(allMatches, {row: r2, col: c2}, intersection);
+            } else {
+                playSound('swap');
+                await animateSwap(r1, c1, r2, c2);
+            }
+        }
+
+        function findMatches() {
+            const allMatches = [];
+            const checked = new Set();
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (checked.has(`${r},${c}`)) continue;
+                    const tile = grid[r][c];
+                    if (!tile || tile.special === 'color-bomb') continue;
+                    const hMatch = [tile];
+                    for (let i = c + 1; i < GRID_SIZE; i++) {
+                        const next = grid[r][i];
+                        if (next && next.type === tile.type && next.special !== 'color-bomb') hMatch.push(next); else break;
+                    }
+                    if (hMatch.length >= 3) {
+                        allMatches.push(hMatch);
+                        hMatch.forEach(t => checked.add(`${t.row},${t.col}`));
+                    }
+                    const vMatch = [tile];
+                    for (let i = r + 1; i < GRID_SIZE; i++) {
+                        const next = grid[i][c];
+                        if (next && next.type === tile.type && next.special !== 'color-bomb') vMatch.push(next); else break;
+                    }
+                    if (vMatch.length >= 3) {
+                        const newTiles = vMatch.filter(t => !checked.has(`${t.row},${t.col}`));
+                        if(newTiles.length >= vMatch.length -1 || vMatch.length > 3) {
+                             allMatches.push(vMatch);
+                             vMatch.forEach(t => checked.add(`${t.row},${t.col}`));
+                        }
+                    }
+                }
+            }
+            return allMatches;
+        }
+        
+        function findIntersection(matchGroups) {
+            const counts = new Map();
+            matchGroups.flat().forEach(tile => {
+                const key = `${tile.row},${tile.col}`;
+                counts.set(key, (counts.get(key) || 0) + 1);
+            });
+            for (const [key, count] of counts.entries()) {
+                if (count > 1) {
+                    const [row, col] = key.split(',').map(Number);
+                    return {row, col};
+                }
+            }
+            return null;
+        }
+
+        async function processMatches(matchGroups, swapPos, intersection) {
+            let combo = 1;
+            let currentMatchGroups = matchGroups;
+            let powerUpToCreate = null;
+
+            while (currentMatchGroups.length > 0) {
+                if (combo > 1) await showComboText(combo);
+                let affected = new Set();
+                let hasBomb = false;
+                
+                if (combo === 1 && swapPos) {
+                    if (intersection) {
+                        powerUpToCreate = { pos: intersection, special: 'super-bomb', type: grid[intersection.row][intersection.col].type };
+                    } else {
+                        let longestMatch = matchGroups.reduce((max, group) => group.length > max.length ? group : max, []);
+                        if (longestMatch.length >= 5) powerUpToCreate = { pos: swapPos, special: 'color-bomb', type: grid[swapPos.row][swapPos.col].type };
+                        else if (longestMatch.length >= 4) {
+                            const isHorizontal = longestMatch[0].row === longestMatch[1].row;
+                            powerUpToCreate = { pos: swapPos, special: isHorizontal ? 'line-v' : 'line-h', type: grid[swapPos.row][swapPos.col].type };
+                        }
+                    }
+                }
+                
+                let specialsToCheck = currentMatchGroups.flat();
+                specialsToCheck.forEach(t => affected.add(t));
+                let i = 0;
+                while(i < specialsToCheck.length) {
+                    const specialTile = specialsToCheck[i];
+                    if (specialTile.isBomb) { hasBomb = true; for(let r = specialTile.row - 1; r <= specialTile.row + 1; r++) for(let c = specialTile.col - 1; c <= specialTile.col + 1; c++) if(grid[r]?.[c] && !affected.has(grid[r][c])) { affected.add(grid[r][c]); specialsToCheck.push(grid[r][c]); } }
+                    if(specialTile.special === 'line-h' || specialTile.special === 'super-bomb') { hasBomb = true; for(let c = 0; c < GRID_SIZE; c++) if(grid[specialTile.row]?.[c] && !affected.has(grid[specialTile.row][c])) { affected.add(grid[specialTile.row][c]); specialsToCheck.push(grid[specialTile.row][c]); } }
+                    if(specialTile.special === 'line-v' || specialTile.special === 'super-bomb') { hasBomb = true; for(let r = 0; r < GRID_SIZE; r++) if(grid[r]?.[specialTile.col] && !affected.has(grid[r][specialTile.col])) { affected.add(grid[r][specialTile.col]); specialsToCheck.push(grid[r][specialTile.col]); } }
+                    i++;
+                }
+                
+                if (powerUpToCreate) {
+                    const powerUpTile = grid[powerUpToCreate.pos.row][powerUpToCreate.pos.col];
+                    affected.delete(powerUpTile);
+                }
+
+                const tilesToRemove = Array.from(affected);
+                if (hasBomb) { playSound('bomb'); gameWrapper.classList.add('screen-shake'); }
+                playSound('match', { combo });
+                const points = tilesToRemove.length * 10 * combo;
+                score += points;
+                showScorePopup(points, swapPos.col, swapPos.row);
+                updateAllDisplays();
+                
+                await animateRemove(tilesToRemove);
+                tilesToRemove.forEach(tile => grid[tile.row][tile.col] = null);
+                
+                if (powerUpToCreate) {
+                    const {pos, special, type} = powerUpToCreate;
+                    grid[pos.row][pos.col] = createTile(pos.row, pos.col, { special, type });
+                    playSound('powerup');
+                }
+
+                await applyGravityAndRefill();
+                currentMatchGroups = findMatches();
+                if (currentMatchGroups.length > 0) combo++;
+                powerUpToCreate = null;
+                intersection = findIntersection(currentMatchGroups);
+            }
+            if (gameWrapper.classList.contains('screen-shake')) setTimeout(() => gameWrapper.classList.remove('screen-shake'), 300);
+            
+            if (!isMovePossible()) await reshuffleBoard();
+            else startHintTimer();
+        }
+
+        async function processColorBomb(colorBomb, otherTile) {
+            isProcessing = true;
+            stopHintTimer();
+            let affected = new Set();
+            affected.add(colorBomb);
+            grid.flat().forEach(t => { if (t && t.type === otherTile.type) affected.add(t); });
+            const tilesToRemove = Array.from(affected);
+            playSound('bomb');
+            gameWrapper.classList.add('screen-shake');
+            const points = tilesToRemove.length * 10 * 2;
+            score += points;
+            showScorePopup(points, colorBomb.col, colorBomb.row);
+            updateAllDisplays();
+            await animateRemove(tilesToRemove);
+            tilesToRemove.forEach(tile => grid[tile.row][tile.col] = null);
+            await applyGravityAndRefill();
+            const newMatches = findMatches();
+            if(newMatches.length > 0) await processMatches(newMatches);
+            if (gameWrapper.classList.contains('screen-shake')) setTimeout(() => gameWrapper.classList.remove('screen-shake'), 300);
+            if (!isMovePossible()) await reshuffleBoard();
+            else startHintTimer();
+            isProcessing = false;
+        }
+
+        async function reshuffleBoard() {
+            isProcessing = true;
+            playSound('shuffle');
+            reshuffleText.classList.add('show');
+            await new Promise(r => setTimeout(r, 1000));
+            reshuffleText.classList.remove('show');
+
+            let allTiles = grid.flat();
+            
+            do {
+                for (let i = allTiles.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [allTiles[i], allTiles[j]] = [allTiles[j], allTiles[i]];
+                }
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        const tile = allTiles[r * GRID_SIZE + c];
+                        tile.row = r;
+                        tile.col = c;
+                        grid[r][c] = tile;
+                    }
+                }
+            } while (findMatches().length > 0 || !isMovePossible());
+
+            renderGrid();
+            grid.flat().forEach(tile => {
+                const el = document.querySelector(`[data-id='${tile.id}']`);
+                if(el) el.classList.add('new-tile-animation');
+            });
+            await new Promise(r => setTimeout(r, 500));
+            isProcessing = false;
+        }
+        
+        function endLevel(isWin) {
+            isProcessing = true;
+            stopHintTimer();
+            saveHighScore(score);
+            finalScoreElement.textContent = score.toLocaleString();
+            
+            const setupButton = (id, callback) => {
+                const button = document.getElementById(id);
+                if (button) {
+                    button.addEventListener('click', () => {
+                        hideModal(endLevelModal);
+                        callback();
+                    }, { once: true });
+                }
+            };
+
+            if (isWin) {
+                endLevelTitle.textContent = "Level Up!";
+                endLevelBorder.className = 'bg-slate-800 p-8 rounded-2xl shadow-2xl text-center border-2 border-emerald-500 w-full max-w-sm';
+                endLevelButtons.innerHTML = `<button id="next-level-button" class="menu-button w-60 py-3 text-xl bg-gradient-to-br from-emerald-500 to-green-600" style="--glow-color: #10b981;">Next Level</button><button id="main-menu-end-button" class="menu-button w-60 py-3 text-xl bg-gradient-to-br from-sky-500 to-blue-600" style="--glow-color: #3b82f6;">Main Menu</button>`;
+                setupButton('next-level-button', () => startGame(level + 1));
+            } else {
+                endLevelTitle.textContent = "Game Over";
+                endLevelBorder.className = 'bg-slate-800 p-8 rounded-2xl shadow-2xl text-center border-2 border-rose-500 w-full max-w-sm';
+                endLevelButtons.innerHTML = `<button id="restart-button" class="menu-button w-60 py-3 text-xl bg-gradient-to-br from-sky-500 to-blue-600" style="--glow-color: #3b82f6;">Try Again</button><button id="main-menu-end-button" class="menu-button w-60 py-3 text-xl bg-slate-600 hover:bg-slate-700" style="--glow-color: #475569;">Main Menu</button>`;
+                setupButton('restart-button', () => startGame(level));
+            }
+            setupButton('main-menu-end-button', init);
+            showModal(endLevelModal);
+        }
+
+        function initializeFirebase() {
+            try {
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) userId = user.uid;
+                    else {
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+                            else await signInAnonymously(auth);
+                        } catch (authError) { userId = 'local-user-' + crypto.randomUUID().substring(0, 8); }
+                    }
+                    if (userId && !isAuthReady) {
+                        isAuthReady = true;
+                        userIdDisplayMenu.textContent = userId;
+                        userIdDisplayGame.textContent = userId;
+                        playButton.classList.remove('disabled');
+                        playButtonText.textContent = 'Play';
+                    }
+                });
+            } catch (error) {
+                userId = 'local-user-' + crypto.randomUUID().substring(0, 8);
+                isAuthReady = true;
+                userIdDisplayMenu.textContent = userId;
+                userIdDisplayGame.textContent = userId;
+                playButton.classList.remove('disabled');
+                playButtonText.textContent = 'Play';
+            }
+        }
+
+        function showModal(modal) { modal.classList.remove('hidden'); }
+        function hideModal(modal) { modal.classList.add('hidden'); }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                stopHintTimer();
+                pauseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>`;
+                showModal(pauseModal);
+            } else {
+                startHintTimer();
+                pauseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6" /></svg>`;
+                hideModal(pauseModal);
+            }
+        }
+
+        function updateAllDisplays() {
+            levelElement.textContent = level;
+            movesElement.textContent = movesRemaining;
+            const progress = Math.min((score / levelTargetScore) * 100, 100);
+            levelProgress.style.width = `${progress}%`;
+            scoreElement.textContent = score.toLocaleString();
+        }
+        
+        function showScorePopup(points, col, row) {
+            const popup = document.createElement('div');
+            popup.textContent = `+${points}`;
+            popup.className = 'score-popup';
+            const tileSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
+            const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
+            popup.style.left = `${col * (tileSize + gap) + tileSize / 2}px`;
+            popup.style.top = `${row * (tileSize + gap) + tileSize / 2}px`;
+            gameContainer.appendChild(popup);
+            requestAnimationFrame(() => {
+                popup.style.transform = 'translateY(-50px) scale(1.5)';
+                popup.style.opacity = '0';
+            });
+            setTimeout(() => popup.remove(), 1000);
+        }
+
+        async function checkEndCondition() {
+            if (score >= levelTargetScore) endLevel(true);
+            else if (movesRemaining <= 0) endLevel(false);
+        }
+
+        function startHintTimer() {
+            stopHintTimer();
+            hintTimer = setTimeout(showHint, 5000);
+        }
+        function stopHintTimer() {
+            clearTimeout(hintTimer);
+            document.querySelectorAll('.hint-pulse').forEach(el => el.classList.remove('hint-pulse'));
+        }
+        function showHint() {
+            const possibleMove = findPossibleMove();
+            if (possibleMove) {
+                possibleMove.forEach(({row, col}) => {
+                    const el = document.querySelector(`[data-row='${row}'][data-col='${col}']`);
+                    if (el) el.classList.add('hint-pulse');
+                });
+            }
+        }
+        
+        function isMovePossible() {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (c < GRID_SIZE - 1) {
+                        [grid[r][c], grid[r][c+1]] = [grid[r][c+1], grid[r][c]];
+                        if (findMatches().length > 0) { [grid[r][c], grid[r][c+1]] = [grid[r][c+1], grid[r][c]]; return true; }
+                        [grid[r][c], grid[r][c+1]] = [grid[r][c+1], grid[r][c]];
+                    }
+                    if (r < GRID_SIZE - 1) {
+                        [grid[r][c], grid[r+1][c]] = [grid[r+1][c], grid[r][c]];
+                        if (findMatches().length > 0) { [grid[r][c], grid[r+1][c]] = [grid[r+1][c], grid[r][c]]; return true; }
+                        [grid[r][c], grid[r+1][c]] = [grid[r+1][c], grid[r][c]];
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function findPossibleMove() {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (c < GRID_SIZE - 1) {
+                        [grid[r][c], grid[r][c+1]] = [grid[r][c+1], grid[r][c]];
+                        if (findMatches().length > 0) { [grid[r][c], grid[r][c+1]] = [grid[r][c+1], grid[r][c]]; return [{row: r, col: c}, {row: r, col: c+1}]; }
+                        [grid[r][c], grid[r][c+1]] = [grid[r][c+1], grid[r][c]];
+                    }
+                    if (r < GRID_SIZE - 1) {
+                        [grid[r][c], grid[r+1][c]] = [grid[r+1][c], grid[r][c]];
+                        if (findMatches().length > 0) { [grid[r][c], grid[r+1][c]] = [grid[r+1][c], grid[r][c]]; return [{row: r, col: c}, {row: r+1, col: c}]; }
+                        [grid[r][c], grid[r+1][c]] = [grid[r+1][c], grid[r][c]];
+                    }
+                }
+            }
+            return null;
+        }
+
+        async function saveHighScore(finalScore) {
+            if (!db || !userId || finalScore === 0) return;
+            try {
+                const docId = `${userId}-${Date.now()}`;
+                const docRef = doc(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/public/data/highscores`, docId);
+                await setDoc(docRef, { userId, score: finalScore, level, timestamp: new Date() });
+            } catch (error) { console.error("Error saving high score: ", error); }
+        }
+        async function displayHighScores() {
+            if (!db) { highScoresList.innerHTML = '<p>High scores unavailable.</p>'; return; }
+            highScoresList.innerHTML = '<p>Loading...</p>';
+            showModal(highScoresModal);
+            try {
+                const scoresRef = collection(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/public/data/highscores`);
+                const querySnapshot = await getDocs(scoresRef);
+                const scores = [];
+                querySnapshot.forEach((doc) => scores.push(doc.data()));
+                scores.sort((a, b) => b.score - a.score);
+                const topScores = scores.slice(0, 10);
+                if (topScores.length === 0) highScoresList.innerHTML = '<p>No high scores yet!</p>';
+                else highScoresList.innerHTML = topScores.map((s, i) => `<div class="flex justify-between p-2 rounded ${i % 2 === 0 ? 'bg-slate-700' : ''}"><span class="font-semibold">${i + 1}. ${s.score.toLocaleString()}</span><span class="text-slate-400 text-sm">User: ...${s.userId.slice(-6)}</span></div>`).join('');
+            } catch (error) {
+                console.error("Error fetching high scores: ", error);
+                highScoresList.innerHTML = '<p class="text-red-400">Could not load scores. This may be due to database permissions.</p>';
+            }
+        }
+        
+        async function applyGravityAndRefill() {
+            const fallMap = [];
+            for (let c = 0; c < GRID_SIZE; c++) {
+                let fallDist = 0;
+                for (let r = GRID_SIZE - 1; r >= 0; r--) {
+                    if (grid[r][c] === null) fallDist++;
+                    else if (fallDist > 0) {
+                        const tile = grid[r][c];
+                        fallMap.push({ tile, newRow: r + fallDist });
+                        grid[r + fallDist][c] = tile;
+                        grid[r][c] = null;
+                    }
+                }
+            }
+            const newTiles = [];
+            for (let c = 0; c < GRID_SIZE; c++) {
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    if (grid[r][c] === null) {
+                        const newTile = createTile(r, c);
+                        grid[r][c] = newTile;
+                        newTiles.push(newTile);
+                    }
+                }
+            }
+            await Promise.all([animateFall(fallMap), animateNewTiles(newTiles)]);
+            renderGrid();
+        }
+        
+        function animateSwap(r1, c1, r2, c2) {
+            return new Promise(resolve => {
+                const tile1 = grid[r1][c1];
+                const tile2 = grid[r2][c2];
+                const el1 = document.querySelector(`[data-id='${tile1.id}']`);
+                const el2 = document.querySelector(`[data-id='${tile2.id}']`);
+                const temp = grid[r1][c1];
+                grid[r1][c1] = grid[r2][c2];
+                grid[r2][c2] = temp;
+                [tile1.row, tile2.row] = [tile2.row, tile1.row];
+                [tile1.col, tile2.col] = [tile2.col, tile1.col];
+                [el1.dataset.row, el2.dataset.row] = [el2.dataset.row, el1.dataset.row];
+                [el1.dataset.col, el2.dataset.col] = [el2.dataset.col, el1.dataset.col];
+                el1.style.transition = 'transform 0.25s ease-out';
+                el2.style.transition = 'transform 0.25s ease-out';
+                const rect1 = el1.getBoundingClientRect();
+                const rect2 = el2.getBoundingClientRect();
+                const dx = rect2.left - rect1.left;
+                const dy = rect2.top - rect1.top;
+                el1.style.transform = `translate(${dx}px, ${dy}px)`;
+                el2.style.transform = `translate(${-dx}px, ${-dy}px)`;
+                setTimeout(() => {
+                    el1.style.transform = ''; el2.style.transform = '';
+                    el1.style.transition = ''; el2.style.transition = '';
+                    resolve();
+                }, 250);
+            });
+        }
+        function animateRemove(tiles) {
+            const promises = tiles.map(tile => new Promise(resolve => {
+                const el = document.querySelector(`[data-id='${tile.id}']`);
+                if (el) { el.classList.add('match-animation'); setTimeout(resolve, 400); } else resolve();
+            }));
+            return Promise.all(promises);
+        }
+        function animateFall(fallMap) {
+            const promises = fallMap.map(({ tile, newRow }) => new Promise(resolve => {
+                const el = document.querySelector(`[data-id='${tile.id}']`);
+                if (el) {
+                    const fallDist = newRow - tile.row;
+                    const tileSize = parseFloat(getComputedStyle(el).height);
+                    const gap = parseFloat(getComputedStyle(gridElement).gap);
+                    el.style.transition = 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+                    el.style.transform = `translateY(${fallDist * (tileSize + gap)}px)`;
+                    setTimeout(() => { tile.row = newRow; resolve(); }, 400);
+                } else resolve();
+            }));
+            return Promise.all(promises);
+        }
+        function animateNewTiles(newTiles) {
+            renderGrid();
+            newTiles.forEach(tile => {
+                const el = document.querySelector(`[data-id='${tile.id}']`);
+                if(el) el.classList.add('new-tile-animation');
+            });
+            return new Promise(resolve => setTimeout(resolve, 400));
+        }
+        async function showComboText(combo) {
+            comboText.textContent = `Combo x${combo}!`;
+            comboText.classList.add('show');
+            await new Promise(r => setTimeout(r, 100));
+            comboText.style.transform = 'translate(-50%, -50%) scale(1)';
+            await new Promise(r => setTimeout(r, 500));
+            comboText.classList.remove('show');
+        }
+        
+        function toggleSound() {
+            isMuted = !isMuted;
+            updateSoundButtons();
+        }
+
+        function updateSoundButtons() {
+            const icon = isMuted ? 
+                `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>` : 
+                `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" /></svg>`;
+            soundToggleButton.innerHTML = icon;
+            soundToggleButtonPause.innerHTML = icon;
+        }
+
+        // --- Event Listeners ---
+        playButton.addEventListener('click', () => { if(!playButton.classList.contains('disabled')) startGame(); });
+        howToPlayButton.addEventListener('click', () => showModal(howToPlayModal));
+        closeHowToPlayButton.addEventListener('click', () => hideModal(howToPlayModal));
+        pauseButton.addEventListener('click', togglePause);
+        resumeButton.addEventListener('click', togglePause);
+        mainMenuButton.addEventListener('click', init);
+        highScoresButton.addEventListener('click', displayHighScores);
+        closeHighScoresButton.addEventListener('click', () => hideModal(highScoresModal));
+        soundToggleButton.addEventListener('click', toggleSound);
+        soundToggleButtonPause.addEventListener('click', toggleSound);
+        
+        let dragStartTile = null;
+        gridElement.addEventListener('pointerdown', e => {
+            if (isProcessing || isPaused) return;
+            const rect = gridElement.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const tileSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
+            const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
+            const totalTileSize = tileSize + gap;
+
+            const col = Math.floor(x / totalTileSize);
+            const row = Math.floor(y / totalTileSize);
+
+            if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
+                if (audioContext.state === 'suspended') audioContext.resume();
+                const tile = grid[row][col];
+                const tileEl = document.querySelector(`[data-id='${tile.id}']`);
+                dragStartTile = { row, col, element: tileEl };
+                tileEl.classList.add('tile-selected');
+            }
+        });
+
+        gridElement.addEventListener('pointerup', e => {
+            if (dragStartTile) {
+                dragStartTile.element.classList.remove('tile-selected');
+                
+                const rect = gridElement.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const tileSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
+                const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
+                const totalTileSize = tileSize + gap;
+
+                const col = Math.floor(x / totalTileSize);
+                const row = Math.floor(y / totalTileSize);
+
+                if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
+                    const dx = Math.abs(dragStartTile.row - row);
+                    const dy = Math.abs(dragStartTile.col - col);
+                    if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+                         trySwap(dragStartTile.row, dragStartTile.col, row, col);
+                    }
+                }
+            }
+            dragStartTile = null;
+        });
+
+        // --- Initial Load ---
+        window.onload = init;
+    </script>
+</body>
+</html>
