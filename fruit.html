@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Gemstone Glitz Ultra</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -29,12 +30,12 @@
         .grid { display: grid; grid-template-columns: repeat(var(--grid-size), 1fr); gap: var(--gap); position: relative; }
         .tile {
             width: var(--tile-size); height: var(--tile-size); display: flex; justify-content: center; align-items: center;
-            font-size: calc(var(--tile-size) * 0.6); border-radius: 12px; cursor: pointer; position: relative;
+            font-size: calc(var(--tile-size) * 0.6); border-radius: 12px; cursor: grab; position: relative;
             transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5); background: rgba(255,255,255,0.1);
             box-shadow: inset 0 0 8px rgba(255,255,255,0.3), 0 4px 6px rgba(0,0,0,0.4);
         }
-        .tile-selected { transform: scale(1.15); box-shadow: 0 0 20px 5px #facc15, inset 0 0 10px rgba(255,255,255,0.5); z-index: 10; animation: wobble 0.5s ease-in-out; }
+        .tile-selected { transform: scale(1.15); box-shadow: 0 0 20px 5px #facc15, inset 0 0 10px rgba(255,255,255,0.5); z-index: 10; animation: wobble 0.5s ease-in-out; cursor: grabbing; }
         @keyframes wobble { 0%, 100% { transform: scale(1.15) rotate(0deg); } 25% { transform: scale(1.15) rotate(-2deg); } 75% { transform: scale(1.15) rotate(2deg); } }
         .hint-pulse { animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
@@ -124,7 +125,7 @@
                 <p>Complete the level goals before you run out of moves!</p>
                 <div class="bg-slate-700/50 p-3 rounded-lg">
                     <p class="font-bold text-white">Create Power-ups:</p>
-                    <p>Match 4: 🍓🍓🍓🍓 ➜ ↔️ (Line Clearer)</p>
+                    <p>Match 4: �🍓🍓🍓 ➜ ↔️ (Line Clearer)</p>
                     <p>Match 5: 💎💎💎💎💎 ➜ 💥 (Color Bomb)</p>
                     <p>Match L/T: ➕ ➜ ✨ (Super Bomb)</p>
                 </div>
@@ -1014,8 +1015,12 @@
                 }
                 
                 if (endRow >= 0 && endRow < GRID_SIZE && endCol >= 0 && endCol < GRID_SIZE) {
+                    if(selectedTile && (selectedTile.row !== dragStartInfo.row || selectedTile.col !== dragStartInfo.col)) {
+                        // This case is handled by the click logic, do nothing here to avoid double-swap
+                    } else {
+                        trySwap(dragStartInfo.row, dragStartInfo.col, endRow, endCol);
+                    }
                     if(selectedTile) selectedTile.element.classList.remove('tile-selected');
-                    trySwap(dragStartInfo.row, dragStartInfo.col, endRow, endCol);
                     selectedTile = null;
                 }
             }
@@ -1030,3 +1035,4 @@
     </script>
 </body>
 </html>
+�
