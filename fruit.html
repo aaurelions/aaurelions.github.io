@@ -62,7 +62,8 @@
         @keyframes screen-shake { 0%, 100% { transform: translateX(0); } 10% { transform: translateX(-5px); } 20% { transform: translateX(5px); } 30% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 50% { transform: translateX(0); } }
         .screen-shake { animation: screen-shake 0.3s ease-in-out; }
         .score-popup { position: absolute; font-weight: 800; color: #facc15; text-shadow: 0 0 5px black; z-index: 100; pointer-events: none; transition: transform 1s ease-out, opacity 1s ease-out; }
-        .goal-item.completed { text-decoration: line-through; color: #4ade80; }
+        .goal-item.completed { text-decoration: line-through; color: #4ade80; animation: goal-complete 0.5s ease-out; }
+        @keyframes goal-complete { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-200 flex items-center justify-center h-screen overflow-hidden">
@@ -119,11 +120,20 @@
     <div id="how-to-play-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
         <div class="bg-slate-800 p-6 rounded-2xl shadow-2xl border-2 border-violet-500 w-full max-w-md">
             <h2 class="text-3xl font-bold mb-4 text-center font-luckiest">How to Play</h2>
-            <div class="space-y-4 text-slate-300">
-                <p><strong class="text-white">Goal:</strong> Complete the level goals before you run out of moves!</p>
-                <p><strong class="text-white">Match 4:</strong> Creates a <strong class="text-cyan-300">Line Clearer</strong>. Match it to clear a row or column.</p>
-                <p><strong class="text-white">Match L/T:</strong> Creates a <strong class="text-orange-400">Super Bomb</strong>. Match it to clear a row AND column.</p>
-                <p><strong class="text-white">Match 5:</strong> Creates a <strong class="text-fuchsia-400">Color Bomb</strong>. Swap it to clear all gems of one color.</p>
+            <div class="space-y-4 text-slate-300 text-center text-lg">
+                <p>Complete the level goals before you run out of moves!</p>
+                <div class="bg-slate-700/50 p-3 rounded-lg">
+                    <p class="font-bold text-white">Create Power-ups:</p>
+                    <p>Match 4: 🍓🍓🍓🍓 ➜ ↔️ (Line Clearer)</p>
+                    <p>Match 5: 💎💎💎💎💎 ➜ 💥 (Color Bomb)</p>
+                    <p>Match L/T: ➕ ➜ ✨ (Super Bomb)</p>
+                </div>
+                <div class="bg-slate-700/50 p-3 rounded-lg">
+                    <p class="font-bold text-white">Combine Power-ups:</p>
+                    <p>↔️ + ✨ ➜ Clears 3 rows & 3 columns!</p>
+                    <p>💥 + ✨ ➜ Upgrades all gems of one color!</p>
+                    <p>💥 + 💥 ➜ Clears the whole board!</p>
+                </div>
             </div>
             <button id="close-how-to-play-button" class="mt-6 menu-button w-full py-2 px-6 text-lg bg-slate-600 hover:bg-slate-700 font-luckiest tracking-wider" style="--glow-color: #475569;">Got it!</button>
         </div>
@@ -357,8 +367,11 @@
         async function swapAndCheck(r1, c1, r2, c2) {
             const tile1 = grid[r1][c1];
             const tile2 = grid[r2][c2];
+
+            if (tile1.special && tile2.special) { await processSpecialCombination(tile1, tile2); return; }
             if (tile1.special === 'color-bomb') { await processColorBomb(tile1, tile2); return; }
             if (tile2.special === 'color-bomb') { await processColorBomb(tile2, tile1); return; }
+            
             playSound('swap');
             await animateSwap(r1, c1, r2, c2);
             const allMatches = findMatches();
@@ -520,6 +533,73 @@
             await applyGravityAndRefill();
             const newMatches = findMatches();
             if(newMatches.length > 0) await processMatches(newMatches);
+            if (gameWrapper.classList.contains('screen-shake')) setTimeout(() => gameWrapper.classList.remove('screen-shake'), 300);
+            if (!isMovePossible()) await reshuffleBoard();
+            else startHintTimer();
+            isProcessing = false;
+        }
+
+        async function processSpecialCombination(tile1, tile2) {
+            isProcessing = true;
+            stopHintTimer();
+            let affected = new Set([tile1, tile2]);
+
+            // Determine the combination effect
+            const specials = [tile1.special, tile2.special].sort().join('+');
+            
+            switch(specials) {
+                case 'line-h+line-v':
+                case 'line-h+line-h':
+                case 'line-v+line-v':
+                case 'line-h+super-bomb':
+                case 'line-v+super-bomb':
+                    // Clear row and column
+                    for(let c = 0; c < GRID_SIZE; c++) if(grid[tile1.row]?.[c]) affected.add(grid[tile1.row][c]);
+                    for(let r = 0; r < GRID_SIZE; r++) if(grid[r]?.[tile1.col]) affected.add(grid[r][tile1.col]);
+                    break;
+                case 'super-bomb+super-bomb':
+                    // 5x5 explosion
+                     for(let r = tile1.row - 2; r <= tile1.row + 2; r++) for(let c = tile1.col - 2; c <= tile1.col + 2; c++) if(grid[r]?.[c]) affected.add(grid[r][c]);
+                    break;
+                case 'color-bomb+line-h':
+                case 'color-bomb+line-v':
+                case 'color-bomb+super-bomb':
+                    // Upgrade gems and trigger them
+                    const targetType = tile2.type;
+                    const newSpecial = tile2.special;
+                    grid.flat().forEach(t => {
+                        if(t && t.type === targetType) {
+                            t.special = newSpecial;
+                            affected.add(t);
+                        }
+                    });
+                    break;
+                case 'color-bomb+color-bomb':
+                    // Clear entire board
+                    grid.flat().forEach(t => { if(t) affected.add(t); });
+                    break;
+            }
+
+            const tilesToRemove = Array.from(affected);
+            
+            tilesToRemove.forEach(tile => {
+                if (levelGoals[tile.type]) levelGoals[tile.type].current++;
+            });
+
+            playSound('bomb');
+            gameWrapper.classList.add('screen-shake');
+            const points = tilesToRemove.length * 20;
+            score += points;
+            showScorePopup(points, tile1.col, tile1.row);
+            updateAllDisplays();
+            
+            await animateRemove(tilesToRemove);
+            tilesToRemove.forEach(tile => grid[tile.row][tile.col] = null);
+            
+            await applyGravityAndRefill();
+            const newMatches = findMatches();
+            if(newMatches.length > 0) await processMatches(newMatches, { row: tile1.row, col: tile1.col });
+            
             if (gameWrapper.classList.contains('screen-shake')) setTimeout(() => gameWrapper.classList.remove('screen-shake'), 300);
             if (!isMovePossible()) await reshuffleBoard();
             else startHintTimer();
@@ -873,39 +953,77 @@
         soundToggleButtonPause.addEventListener('click', toggleSound);
         
         let selectedTile = null;
+        let dragStartInfo = null;
 
-        gridElement.addEventListener('pointerdown', e => {
+        function handlePointerDown(e) {
             if (isProcessing || isPaused) return;
             const target = e.target.closest('.tile');
             if (!target) return;
 
             if (audioContext.state === 'suspended') audioContext.resume();
-
+            
             const row = parseInt(target.dataset.row);
             const col = parseInt(target.dataset.col);
+            
+            dragStartInfo = { row, col, clientX: e.clientX || e.touches[0].clientX, clientY: e.clientY || e.touches[0].clientY };
 
             if (!selectedTile) {
-                // First tile selected
                 selectedTile = { row, col, element: target };
                 target.classList.add('tile-selected');
             } else {
-                // Second tile selected
                 selectedTile.element.classList.remove('tile-selected');
-                
                 const dx = Math.abs(selectedTile.row - row);
                 const dy = Math.abs(selectedTile.col - col);
 
                 if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-                    // It's a valid adjacent tile, attempt swap
                     trySwap(selectedTile.row, selectedTile.col, row, col);
                     selectedTile = null;
                 } else {
-                    // It's not adjacent, deselect old and select new
                     selectedTile = { row, col, element: target };
                     target.classList.add('tile-selected');
                 }
             }
-        });
+        }
+
+        function handlePointerUp(e) {
+            if (!dragStartInfo || isProcessing || isPaused) return;
+
+            const endX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
+            const endY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
+            
+            if (endX === undefined || endY === undefined) {
+                if(selectedTile) selectedTile.element.classList.remove('tile-selected');
+                selectedTile = null;
+                dragStartInfo = null;
+                return;
+            }
+
+            const deltaX = endX - dragStartInfo.clientX;
+            const deltaY = endY - dragStartInfo.clientY;
+            
+            const swipeThreshold = 20;
+
+            if (Math.abs(deltaX) > swipeThreshold || Math.abs(deltaY) > swipeThreshold) {
+                let endRow = dragStartInfo.row;
+                let endCol = dragStartInfo.col;
+
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    endCol += (deltaX > 0 ? 1 : -1);
+                } else {
+                    endRow += (deltaY > 0 ? 1 : -1);
+                }
+                
+                if (endRow >= 0 && endRow < GRID_SIZE && endCol >= 0 && endCol < GRID_SIZE) {
+                    if(selectedTile) selectedTile.element.classList.remove('tile-selected');
+                    trySwap(dragStartInfo.row, dragStartInfo.col, endRow, endCol);
+                    selectedTile = null;
+                }
+            }
+            dragStartInfo = null;
+        }
+
+        gridElement.addEventListener('pointerdown', handlePointerDown);
+        window.addEventListener('pointerup', handlePointerUp);
 
         // --- Initial Load ---
         window.onload = init;
